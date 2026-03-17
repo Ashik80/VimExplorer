@@ -1,0 +1,172 @@
+*vimexplorer.txt*   An oil.nvim-style file explorer for Vim
+
+==============================================================================
+CONTENTS                                               *vimexplorer-contents*
+
+    1. Introduction ............... |vimexplorer-intro|
+    2. Usage ...................... |vimexplorer-usage|
+    3. Key Bindings ............... |vimexplorer-keys|
+    4. Editing .................... |vimexplorer-editing|
+    5. Configuration .............. |vimexplorer-config|
+    6. Commands ................... |vimexplorer-commands|
+    7. Syntax Highlighting ........ |vimexplorer-syntax|
+
+==============================================================================
+1. INTRODUCTION                                           *vimexplorer-intro*
+
+VimExplorer opens a directory as an editable buffer. Files and directories
+are displayed as plain text. You can rename, delete, create, copy, and move
+entries by editing the buffer and saving it with |:w|.
+
+Inspired by oil.nvim for Neovim, written entirely in Vimscript.
+
+==============================================================================
+2. USAGE                                                  *vimexplorer-usage*
+
+Open the explorer for the directory of the current file: >
+    :VimExplorer
+
+Open for a specific directory: >
+    :VimExplorer /path/to/dir
+
+Open for Vim's current working directory: >
+    :VimExplorerCwd
+
+Recommended mapping in your |vimrc|: >
+    nnoremap <silent> - :VimExplorer<CR>
+
+==============================================================================
+3. KEY BINDINGS                                            *vimexplorer-keys*
+
+    <CR>        Open file or enter directory under cursor
+    -           Go up one directory
+    <BS>        Go up one directory
+    gh          Toggle display of hidden files (dotfiles)
+    gd          Toggle detail mode (permissions and size prefix)
+    yy          Yank (copy) the entry under cursor
+    dd          Cut (move) the entry under cursor
+    p / P       Paste yanked/cut entry (standard Vim)
+    <C-v>       Open file under cursor in a vertical split
+    <C-s>       Open file under cursor in a horizontal split
+    R           Refresh the directory listing
+    :w          Apply all edits (rename / delete / create / copy / move)
+    q           Close the explorer buffer
+    ?           Show a brief key binding summary
+
+==============================================================================
+4. EDITING                                              *vimexplorer-editing*
+
+RENAME~
+Edit the filename portion of a line. Save with |:w|. You will be prompted
+to confirm before any rename takes place.
+
+    Before:  old_name.txt
+    After:   new_name.txt
+
+DELETE~
+Delete the entire line. Save with |:w|. You will be prompted to confirm
+before any deletion takes place.
+
+CREATE FILE~
+Add a new line with the desired filename. Save with |:w|. You will be
+prompted to confirm before any creation takes place. Nested paths are
+supported — parent directories are created automatically: >
+
+    hello.txt
+    new_dir/hello.txt
+
+CREATE DIRECTORY~
+Add a new line ending with a forward slash /. Save with |:w|. Nested
+directories are supported: >
+
+    new_dir/
+    new_dir/subdir/
+
+COPY FILE~
+Open the source directory in one explorer buffer and the destination
+directory in another. Use |yy| to yank the filename in the source buffer,
+then paste it into the destination buffer with |p|. Save the destination
+buffer with |:w|. The file is copied; the original is left untouched.
+
+MOVE FILE~
+Same as copy, but use |dd| instead of |yy| to cut the line. Save the
+destination buffer with |:w| and VimExplorer will move the file atomically.
+If the source buffer is also saved, the now-missing entry is silently
+ignored.
+
+DETAIL MODE~
+When detail mode is active (|gd| to toggle), each line is prefixed with
+permissions and size: >
+
+    drwxr-xr-x          src/
+    -rw-r--r--    42B   README.md
+
+Only the filename portion (after the prefix) is used when saving. You can
+safely edit just the name at the end of the line.
+
+==============================================================================
+5. CONFIGURATION                                         *vimexplorer-config*
+
+All variables can be set in your |vimrc| before the plugin loads.
+
+*g:vimexplorer_show_hidden*             (default: 0)
+    Show hidden files (dotfiles) by default. >
+        let g:vimexplorer_show_hidden = 1
+
+*g:vimexplorer_detail*                  (default: 1)
+    Show file permissions and size prefix by default. >
+        let g:vimexplorer_detail = 0
+
+*g:vimexplorer_show_header*             (default: 1)
+    Show the header lines (current path and key binding hint) at the top
+    of the explorer buffer. Disable to get a clean listing: >
+        let g:vimexplorer_show_header = 0
+
+    Hidden files and detail mode can be toggled on the fly with |gh| and
+    |gd| respectively.
+
+*g:vimexplorer_win_height*              (default: 20)
+    Reserved for future split-window mode. Not yet used.
+
+==============================================================================
+6. COMMANDS                                            *vimexplorer-commands*
+
+:VimExplorer [dir]                                          *:VimExplorer*
+    Open the explorer for [dir]. If [dir] is omitted, uses the directory
+    of the current file (or |getcwd()| if no file is open).
+
+:VimExplorerCwd                                          *:VimExplorerCwd*
+    Open the explorer for Vim's current working directory.
+
+==============================================================================
+7. SYNTAX HIGHLIGHTING                                   *vimexplorer-syntax*
+
+VimExplorer ships a syntax file that highlights the buffer automatically.
+The following highlight groups are defined:
+
+    VimExplorerHeader   The path and hint lines at the top of the buffer.
+                        Linked to |hl-Comment| by default.
+
+    VimExplorerDir      Directory entries (names ending with /).
+                        Linked to |hl-Directory| by default.
+
+    VimExplorerPerms    The permissions string in detail mode.
+                        Linked to |hl-NonText| by default.
+
+    VimExplorerSize     The file size field in detail mode.
+                        Linked to |hl-Number| by default.
+
+    VimExplorerDotfile  Hidden files and directories (dotfiles).
+                        Linked to |hl-Comment| by default.
+
+All groups use `highlight default link` so they work with any colorscheme
+out of the box. To override them, add lines like the following to your
+|vimrc| after your colorscheme is set: >
+
+    highlight VimExplorerDir    ctermfg=cyan  guifg=#89dceb
+    highlight VimExplorerPerms  ctermfg=240   guifg=#585858
+    highlight VimExplorerSize   ctermfg=yellow guifg=#f9e2af
+    highlight VimExplorerDotfile ctermfg=238  guifg=#45475a
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

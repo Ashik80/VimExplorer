@@ -7,13 +7,13 @@ An oil.nvim-style file explorer for Vim. Edit your filesystem like a buffer — 
 **Vim** — clone into `~/.vim/pack/plugins/start/`:
 
 ```sh
-git clone https://github.com/YOUR_USERNAME/vimexplorer ~/.vim/pack/plugins/start/vimexplorer
+git clone https://github.com/Ashik80/vimexplorer ~/.vim/pack/plugins/start/vimexplorer
 ```
 
 **Neovim** — clone into `~/.local/share/nvim/site/pack/plugins/start/`:
 
 ```sh
-git clone https://github.com/YOUR_USERNAME/vimexplorer ~/.local/share/nvim/site/pack/plugins/start/vimexplorer
+git clone https://github.com/Ashik80/vimexplorer ~/.local/share/nvim/site/pack/plugins/start/vimexplorer
 ```
 
 Both use Vim's built-in package loader (`:h packages`), no plugin manager needed. After cloning, generate the help tags:

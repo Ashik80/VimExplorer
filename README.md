@@ -2,6 +2,14 @@
 
 An oil.nvim-style file explorer for Vim. Edit your filesystem like a buffer — rename, delete, create, copy, and move files by editing text and saving with `:w`.
 
+**Demo:** https://youtu.be/5Zo84JBFdoI
+
+**Details On**
+![Details On](https://i.imgur.com/3pTVA9I.png)
+
+**Details Off**
+![Details Off](https://i.imgur.com/TLpb7RB.png)
+
 ## Installation
 
 **Vim** — clone into `~/.vim/pack/plugins/start/`:

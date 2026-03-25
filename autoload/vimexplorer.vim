@@ -467,20 +467,19 @@ endfunction
 
 " Read and sort directory entries
 function! s:ReadDir(dir, show_hidden) abort
-  let l:all = glob(a:dir . '/*', 0, 1)
-  if a:show_hidden
-    let l:hidden = glob(a:dir . '/.*', 0, 1)
-    " Remove . and ..
-    let l:hidden = filter(l:hidden, 'v:val !~# "/\\.\\.$" && v:val !~# "/\\.$"')
-    let l:all = l:hidden + l:all
+  " Use readdir() instead of glob() so that directory names containing special
+  " glob characters (e.g. "[slug]", "{foo}", "*") are handled literally.
+  let l:names = readdir(a:dir)
+  if !a:show_hidden
+    let l:names = filter(l:names, 'v:val[0] !=# "."')
   endif
 
   let l:entries = []
-  for l:path in l:all
-    let l:name = fnamemodify(l:path, ':t')
+  for l:name in l:names
     if l:name ==# ''
       continue
     endif
+    let l:path = a:dir . '/' . l:name
     let l:is_dir = isdirectory(l:path)
     let l:entry  = {
           \ 'name':   l:name,

@@ -329,25 +329,6 @@ function! vimexplorer#ToggleDetail() abort
   call s:Render(l:bufnr)
 endfunction
 
-" Open file in a vertical split
-function! vimexplorer#OpenSplit(vertical) abort
-  let l:bufnr = bufnr('%')
-  if !has_key(s:state, l:bufnr)
-    return
-  endif
-  let l:dir = s:state[l:bufnr].dir
-  let l:name = s:NameUnderCursor()
-  if l:name ==# '' || isdirectory(l:dir . '/' . l:name)
-    return
-  endif
-  let l:target = l:dir . '/' . l:name
-  if a:vertical
-    execute 'vsplit ' . fnameescape(l:target)
-  else
-    execute 'split ' . fnameescape(l:target)
-  endif
-endfunction
-
 " Mark as cut
 function! vimexplorer#Cut() abort
   let l:bufnr = bufnr('%')
@@ -413,10 +394,7 @@ function! s:SetupBuffer(dir) abort
   nnoremap <buffer> <silent> <BS>   :call vimexplorer#Up()<CR>
   nnoremap <buffer> <silent> gh     :call vimexplorer#ToggleHidden()<CR>
   nnoremap <buffer> <silent> gd     :call vimexplorer#ToggleDetail()<CR>
-  nnoremap <buffer> <silent> <C-v>  :call vimexplorer#OpenSplit(1)<CR>
-  nnoremap <buffer> <silent> <C-s>  :call vimexplorer#OpenSplit(0)<CR>
   nnoremap <buffer> <silent> R      :call vimexplorer#Refresh()<CR>
-  nnoremap <buffer> <silent> q      :bdelete<CR>
   nnoremap <buffer> <silent> ?      :call vimexplorer#Help()<CR>
   nnoremap <buffer> <silent> dd     :call vimexplorer#Cut()<CR>
   nnoremap <buffer> <silent> yy     :call vimexplorer#Yank()<CR>
@@ -637,11 +615,8 @@ function! vimexplorer#Help() abort
   echo '<BS>    Go up one directory'
   echo 'gh      Toggle hidden files'
   echo 'gd      Toggle detail mode (size + perms)'
-  echo '<C-v>   Open file in vertical split'
-  echo '<C-s>   Open file in horizontal split'
   echo 'R       Refresh listing'
   echo ':w      Apply pending renames / deletions / creations / moves / copies'
-  echo 'q       Close explorer'
   echo '?       Show this help'
   echo ''
   echo 'Editing:'

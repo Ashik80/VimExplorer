@@ -56,11 +56,8 @@ nnoremap <silent> - :VimExplorer<CR>
 | `yy`      | Yank entry (copy intent)            |
 | `dd`      | Cut entry (move intent)             |
 | `p` / `P` | Paste yanked/cut entry              |
-| `<C-v>`   | Open file in vertical split         |
-| `<C-s>`   | Open file in horizontal split       |
 | `R`       | Refresh listing                     |
 | `:w`      | Apply all pending edits             |
-| `q`       | Close explorer                      |
 | `?`       | Show key binding summary            |
 
 ## Editing

@@ -329,7 +329,7 @@ function! vimexplorer#ToggleDetail() abort
   call s:Render(l:bufnr)
 endfunction
 
-" Mark as cut
+" Mark as cut (normal mode — single line)
 function! vimexplorer#Cut() abort
   let l:bufnr = bufnr('%')
   if !has_key(s:state, l:bufnr)
@@ -342,6 +342,35 @@ function! vimexplorer#Cut() abort
   let l:path = s:state[l:bufnr].dir . '/' . l:name
   let s:cut_paths[l:path] = 1
   normal! dd
+endfunction
+
+" Mark as cut (visual mode — multiple lines)
+function! vimexplorer#CutVisual() abort
+  let l:bufnr = bufnr('%')
+  if !has_key(s:state, l:bufnr)
+    return
+  endif
+  let l:dir = s:state[l:bufnr].dir
+  let l:start = line("'<")
+  let l:end   = line("'>")
+  for l:lnum in range(l:start, l:end)
+    let l:line = getline(l:lnum)
+    if l:line =~# '^"' || l:line =~# '^\s*$'
+      continue
+    endif
+    let l:detail = get(get(s:state, l:bufnr, {}), 'detail', 0)
+    if l:detail
+      let l:name = substitute(l:line, '^\S\{10\}\s\+\S*\s\+', '', '')
+    else
+      let l:name = l:line
+    endif
+    let l:name = trim(substitute(l:name, '/$', '', ''))
+    if l:name !=# ''
+      let l:path = l:dir . '/' . l:name
+      let s:cut_paths[l:path] = 1
+    endif
+  endfor
+  normal! gvd
 endfunction
 
 " Don't mark as cut
@@ -382,8 +411,8 @@ function! s:SetupBuffer(dir) abort
   if !has_key(s:state, l:bufnr)
     let s:state[l:bufnr] = {}
   endif
-  let s:state[l:bufnr].dir         = a:dir
-  let s:state[l:bufnr].names       = []
+  let s:state[l:bufnr].dir           = a:dir
+  let s:state[l:bufnr].names         = []
   let s:state[l:bufnr].show_hidden   = get(s:state[l:bufnr], 'show_hidden',   g:vimexplorer_show_hidden)
   let s:state[l:bufnr].detail        = get(s:state[l:bufnr], 'detail',        g:vimexplorer_detail)
   let s:state[l:bufnr].show_header   = get(s:state[l:bufnr], 'show_header',   g:vimexplorer_show_header)
@@ -397,6 +426,7 @@ function! s:SetupBuffer(dir) abort
   nnoremap <buffer> <silent> R      :call vimexplorer#Refresh()<CR>
   nnoremap <buffer> <silent> ?      :call vimexplorer#Help()<CR>
   nnoremap <buffer> <silent> dd     :call vimexplorer#Cut()<CR>
+  xnoremap <buffer> <silent> d      :<C-u>call vimexplorer#CutVisual()<CR>
   nnoremap <buffer> <silent> yy     :call vimexplorer#Yank()<CR>
 endfunction
 

@@ -6,6 +6,9 @@ let s:state = {}
 " Paths explicitly cut (dd) — used to distinguish move from copy
 let s:cut_paths = {}
 
+" Paths explicitly yanked (yy) — only these are eligible for copy-on-paste
+let s:yank_paths = {}
+
 " Open the explorer buffer
 function! vimexplorer#Open(path) abort
   " If path is not provided should open in cwd
@@ -191,6 +194,9 @@ function! vimexplorer#Save() abort
           if v:shell_error !=# 0
             echohl ErrorMsg | echo 'VimExplorer: failed to copy dir: ' . l:src_path | echohl None
           else
+            if has_key(s:yank_paths, l:src_path)
+              unlet s:yank_paths[l:src_path]
+            endif
             echo 'Copied: ' . l:src_path . ' → ' . l:dname
           endif
         endif
@@ -236,6 +242,9 @@ function! vimexplorer#Save() abort
             if writefile(l:content, l:fpath, 'b') !=# 0
               echohl ErrorMsg | echo 'VimExplorer: failed to copy to: ' . l:fpath | echohl None
             else
+              if has_key(s:yank_paths, l:src_path)
+                unlet s:yank_paths[l:src_path]
+              endif
               echo 'Copied: ' . l:src_path . ' → ' . l:fpath
             endif
           endif
@@ -341,6 +350,9 @@ function! vimexplorer#Cut() abort
   endif
   let l:path = s:state[l:bufnr].dir . '/' . l:name
   let s:cut_paths[l:path] = 1
+  if has_key(s:yank_paths, l:path)
+    unlet s:yank_paths[l:path]
+  endif
   normal! dd
 endfunction
 
@@ -388,6 +400,8 @@ function! vimexplorer#Yank() abort
   if has_key(s:cut_paths, l:path)
     unlet s:cut_paths[l:path]
   endif
+  " Mark as explicitly yanked so paste in another buffer triggers copy
+  let s:yank_paths[l:path] = 1
   normal! yy
 endfunction
 
@@ -620,15 +634,18 @@ function! vimexplorer#StatusLine() abort
   return ' VimExplorer  ' . l:st.dir . '  ' . l:h . l:d
 endfunction
 
-" Find a file by name in any other open explorer buffer
-" Returns the full path if found, or '' if not found or same directory.
+" Find a file by name in any other open explorer buffer.
+" Only returns a path if it was explicitly cut (dd) or yanked (yy) —
+" prevents accidental copy when a same-named file exists elsewhere.
+" Returns the full path if found, or '' otherwise.
 function! s:FindInOtherBuffers(name, current_dir) abort
   for [l:bufnr, l:st] in items(s:state)
     if l:st.dir ==# a:current_dir
       continue
     endif
     let l:candidate = l:st.dir . '/' . a:name
-    if filereadable(l:candidate) || isdirectory(l:candidate)
+    if (filereadable(l:candidate) || isdirectory(l:candidate))
+          \ && (has_key(s:cut_paths, l:candidate) || has_key(s:yank_paths, l:candidate))
       return l:candidate
     endif
   endfor

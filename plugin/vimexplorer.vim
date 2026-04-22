@@ -35,4 +35,5 @@ augroup VimExplorer
   autocmd!
   autocmd BufWriteCmd vimexplorer://* call vimexplorer#Save()
   autocmd BufEnter    vimexplorer://* call vimexplorer#Refresh()
+  autocmd BufEnter * if isdirectory(expand('<afile>')) && expand('<afile>') !~# '^vimexplorer://' | call vimexplorer#Open(expand('<afile>')) | endif
 augroup END

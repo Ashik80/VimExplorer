@@ -405,6 +405,38 @@ function! vimexplorer#Yank() abort
   normal! yy
 endfunction
 
+" Mark as yanked (visual mode — multiple lines)
+function! vimexplorer#YankVisual() abort
+  let l:bufnr = bufnr('%')
+  if !has_key(s:state, l:bufnr)
+    return
+  endif
+  let l:dir = s:state[l:bufnr].dir
+  let l:start = line("'<")
+  let l:end   = line("'>")
+  for l:lnum in range(l:start, l:end)
+    let l:line = getline(l:lnum)
+    if l:line =~# '^"' || l:line =~# '^\s*$'
+      continue
+    endif
+    let l:detail = get(get(s:state, l:bufnr, {}), 'detail', 0)
+    if l:detail
+      let l:name = substitute(l:line, '^\S\{10\}\s\+\S*\s\+', '', '')
+    else
+      let l:name = l:line
+    endif
+    let l:name = trim(substitute(l:name, '/$', '', ''))
+    if l:name !=# ''
+      let l:path = l:dir . '/' . l:name
+      if has_key(s:cut_paths, l:path)
+        unlet s:cut_paths[l:path]
+      endif
+      let s:yank_paths[l:path] = 1
+    endif
+  endfor
+  normal! gvy
+endfunction
+
 " Set up the explorer buffer
 function! s:SetupBuffer(dir) abort
   let l:bufnr = bufnr('%')
@@ -442,6 +474,7 @@ function! s:SetupBuffer(dir) abort
   nnoremap <buffer> <silent> dd     :call vimexplorer#Cut()<CR>
   xnoremap <buffer> <silent> d      :<C-u>call vimexplorer#CutVisual()<CR>
   nnoremap <buffer> <silent> yy     :call vimexplorer#Yank()<CR>
+  xnoremap <buffer> <silent> y      :<C-u>call vimexplorer#YankVisual()<CR>
 endfunction
 
 " Render the buffer contents

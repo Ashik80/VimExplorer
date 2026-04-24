@@ -7,8 +7,8 @@ endif
 syntax match VimExplorerHeader  /^".*$/
 
 " Directory entries (lines ending with /)
-syntax match VimExplorerDir     /\S\+\/$/
-" In detail mode the slash is still at the end, same pattern covers it
+" \S.*\/ matches from first non-space to trailing slash, handles spaces in names
+syntax match VimExplorerDir     /\S.*\/$/
 
 " Detail mode: permissions string at the start of the line
 syntax match VimExplorerPerms   /^[dlrwxs\-]\{10\}/

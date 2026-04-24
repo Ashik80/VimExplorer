@@ -36,7 +36,7 @@ function! vimexplorer#Open(path) abort
   if l:existing != -1
     execute 'buffer ' . l:existing
   else
-    execute 'edit ' . fnameescape(l:bufname)
+    execute 'edit ' . escape(l:bufname, ' \%#')
   endif
 
   call s:SetupBuffer(l:dir)
@@ -371,8 +371,8 @@ function! vimexplorer#CutVisual() abort
       continue
     endif
     let l:detail = get(get(s:state, l:bufnr, {}), 'detail', 0)
-    if l:detail
-      let l:name = substitute(l:line, '^\S\{10\}\s\+\S*\s\+', '', '')
+    if l:detail && l:line =~# '^\S\{10\}\s'
+      let l:name = l:line[20:]
     else
       let l:name = l:line
     endif
@@ -420,8 +420,8 @@ function! vimexplorer#YankVisual() abort
       continue
     endif
     let l:detail = get(get(s:state, l:bufnr, {}), 'detail', 0)
-    if l:detail
-      let l:name = substitute(l:line, '^\S\{10\}\s\+\S*\s\+', '', '')
+    if l:detail && l:line =~# '^\S\{10\}\s'
+      let l:name = l:line[20:]
     else
       let l:name = l:line
     endif
@@ -575,10 +575,9 @@ function! s:NameUnderCursor() abort
   let l:bufnr = bufnr('%')
   let l:detail = get(get(s:state, l:bufnr, {}), 'detail', 0)
 
-  if l:detail
-    " Format: "rwxr-xr-x   1.2K  filename"
-    " Strip leading perms (10 chars) + 2 spaces + size (6 chars) + 2 spaces
-    let l:name = substitute(l:line, '^\S\{10\}\s\+\S*\s\+', '', '')
+  if l:detail && l:line =~# '^\S\{10\}\s'
+    " Existing entry with detail prefix: perms(10) + 2sp + size(6) + 2sp = 20 chars
+    let l:name = l:line[20:]
   else
     let l:name = l:line
   endif
@@ -598,8 +597,9 @@ function! s:ParseLines(lines) abort
     let l:bufnr = bufnr('%')
     let l:detail = get(get(s:state, l:bufnr, {}), 'detail', 0)
 
-    if l:detail
-      let l:name = substitute(l:line, '^\S\{10\}\s\+\S*\s\+', '', '')
+    if l:detail && l:line =~# '^\S\{10\}\s'
+      " Existing entry with detail prefix: perms(10) + 2sp + size(6) + 2sp = 20 chars
+      let l:name = l:line[20:]
     else
       let l:name = l:line
     endif

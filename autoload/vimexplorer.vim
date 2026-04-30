@@ -116,14 +116,15 @@ function! vimexplorer#Save() abort
 
   " Apply renames
   for [l:old, l:new] in l:to_rename
-    if l:new =~# '/'
+    let l:new_bare = substitute(l:new, '/$', '', '')
+    if l:new_bare =~# '/'
       echohl ErrorMsg
       echo 'VimExplorer: rename across directories not supported: ' . l:new
       echohl None
       continue
     endif
     let l:src = l:dir . '/' . l:old
-    let l:dst = l:dir . '/' . l:new
+    let l:dst = l:dir . '/' . l:new_bare
     if filereadable(l:dst) || isdirectory(l:dst)
       echohl ErrorMsg
       echo 'VimExplorer: target already exists: ' . l:dst

@@ -386,6 +386,22 @@ function! vimexplorer#CutVisual() abort
   normal! gvd
 endfunction
 
+" Copy absolute path of entry under cursor to system clipboard
+function! vimexplorer#CopyPath() abort
+  let l:bufnr = bufnr('%')
+  if !has_key(s:state, l:bufnr)
+    return
+  endif
+  let l:name = s:NameUnderCursor()
+  if l:name ==# ''
+    return
+  endif
+  let l:path = s:state[l:bufnr].dir . '/' . l:name
+  call setreg('+', l:path)
+  call setreg('"', l:path)
+  echo 'Copied: ' . l:path
+endfunction
+
 " Don't mark as cut
 function! vimexplorer#Yank() abort
   let l:bufnr = bufnr('%')
@@ -476,6 +492,7 @@ function! s:SetupBuffer(dir) abort
   xnoremap <buffer> <silent> d      :<C-u>call vimexplorer#CutVisual()<CR>
   nnoremap <buffer> <silent> yy     :call vimexplorer#Yank()<CR>
   xnoremap <buffer> <silent> y      :<C-u>call vimexplorer#YankVisual()<CR>
+  nnoremap <buffer> <silent> fp     :call vimexplorer#CopyPath()<CR>
 endfunction
 
 " Render the buffer contents
@@ -697,6 +714,7 @@ function! vimexplorer#Help() abort
   echo 'gh      Toggle hidden files'
   echo 'gd      Toggle detail mode (size + perms)'
   echo 'R       Refresh listing'
+  echo 'fp      Copy absolute path to clipboard'
   echo ':w      Apply pending renames / deletions / creations / moves / copies'
   echo '?       Show this help'
   echo ''

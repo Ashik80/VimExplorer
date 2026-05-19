@@ -1,17 +1,11 @@
 " autoload/vimexplorer.vim
 
-" Script-local state
 let s:state = {}
+let s:cut_paths = {}   " distinguish move from copy on paste
+let s:yank_paths = {}  " only explicitly yanked paths eligible for copy
+let s:pending_pastes = {} " {bufnr: [{pasted_name, src_path}]} — survives rename before :w
 
-" Paths explicitly cut (dd) — used to distinguish move from copy
-let s:cut_paths = {}
-
-" Paths explicitly yanked (yy) — only these are eligible for copy-on-paste
-let s:yank_paths = {}
-
-" Open the explorer buffer
 function! vimexplorer#Open(path) abort
-  " If path is not provided should open in cwd
   if a:path ==# ''
     let l:dir = expand('%:p:h')
     if l:dir ==# '' || !isdirectory(l:dir)
@@ -43,7 +37,6 @@ function! vimexplorer#Open(path) abort
   call s:Render(bufnr('%'))
 endfunction
 
-" Save to apply edits to filesystem
 function! vimexplorer#Save() abort
   let l:bufnr = bufnr('%')
   if !has_key(s:state, l:bufnr)
@@ -55,9 +48,7 @@ function! vimexplorer#Save() abort
   let l:dir = l:st.dir
 
   let l:new_names = s:ParseLines(getline(1, '$'))
-
   let l:old_names = l:st.names
-
   let l:new_names_bare = map(copy(l:new_names), 'substitute(v:val, "/$", "", "")')
 
   let l:old_only = []
@@ -87,13 +78,11 @@ function! vimexplorer#Save() abort
     endif
   endfor
 
-  " Entries in old_only not consumed by a rename are true deletions
+  " old_only entries not consumed by rename are true deletions
   let l:to_delete = l:old_only[l:ri :]
 
-  " Confirm deletions
   if !empty(l:to_delete)
-    let l:msg = 'VimExplorer: delete ' . len(l:to_delete) . ' item(s)? [y/N] '
-    let l:ans = input(l:msg)
+    let l:ans = input('VimExplorer: delete ' . len(l:to_delete) . ' item(s)? [y/N] ')
     if l:ans !~? '^y'
       echo "\nAborted."
       call s:Render(l:bufnr)
@@ -102,10 +91,8 @@ function! vimexplorer#Save() abort
     echo ''
   endif
 
-  " Confirm renames
   if !empty(l:to_rename)
-    let l:msg = 'VimExplorer: rename ' . len(l:to_rename) . ' item(s)? [y/N] '
-    let l:ans = input(l:msg)
+    let l:ans = input('VimExplorer: rename ' . len(l:to_rename) . ' item(s)? [y/N] ')
     if l:ans !~? '^y'
       echo "\nAborted."
       call s:Render(l:bufnr)
@@ -114,7 +101,6 @@ function! vimexplorer#Save() abort
     echo ''
   endif
 
-  " Apply renames
   for [l:old, l:new] in l:to_rename
     let l:new_bare = substitute(l:new, '/$', '', '')
     if l:new_bare =~# '/'
@@ -140,7 +126,6 @@ function! vimexplorer#Save() abort
     endif
   endfor
 
-  " Apply deletions
   for l:name in l:to_delete
     let l:target = l:dir . '/' . l:name
     if isdirectory(l:target)
@@ -161,10 +146,8 @@ function! vimexplorer#Save() abort
     endif
   endfor
 
-  " Confirm creations
   if !empty(l:new_files)
-    let l:msg = 'VimExplorer: create ' . len(l:new_files) . ' item(s)? [y/N] '
-    let l:ans = input(l:msg)
+    let l:ans = input('VimExplorer: create ' . len(l:new_files) . ' item(s)? [y/N] ')
     if l:ans !~? '^y'
       echo "\nAborted."
       call s:Render(l:bufnr)
@@ -173,16 +156,13 @@ function! vimexplorer#Save() abort
     echo ''
   endif
 
-  " Create new files
   for l:name in l:new_files
     if l:name =~# '/$'
       let l:bare  = l:name[:-2]
       let l:dname = l:dir . '/' . l:bare
       let l:src_path = s:FindInOtherBuffers(l:bare, l:dir)
       if l:src_path !=# ''
-        " Directory came from another explorer buffer — move or copy it
         if has_key(s:cut_paths, l:src_path)
-          " Cut (dd) → move
           if rename(l:src_path, l:dname) !=# 0
             echohl ErrorMsg | echo 'VimExplorer: failed to move dir: ' . l:src_path | echohl None
           else
@@ -190,7 +170,6 @@ function! vimexplorer#Save() abort
             echo 'Moved: ' . l:src_path . ' → ' . l:dname
           endif
         else
-          " Yank (yy) → recursive copy
           let l:out = system('cp -r ' . shellescape(l:src_path) . ' ' . shellescape(l:dname))
           if v:shell_error !=# 0
             echohl ErrorMsg | echo 'VimExplorer: failed to copy dir: ' . l:src_path | echohl None
@@ -202,7 +181,6 @@ function! vimexplorer#Save() abort
           endif
         endif
       else
-        " No source found → create empty directory
         if mkdir(l:dname, 'p') ==# 0
           echohl ErrorMsg | echo 'VimExplorer: failed to create dir: ' . l:dname | echohl None
         else
@@ -211,18 +189,16 @@ function! vimexplorer#Save() abort
       endif
     else
       let l:fpath = l:dir . '/' . l:name
-      " Check if a file with this name exists somewhere in the original
-      " listing's parent directories — i.e. the user copied it from
-      " another open explorer buffer. We do this by searching all known
-      " explorer buffers for a directory containing this filename.
       let l:src_path = s:FindInOtherBuffers(l:name, l:dir)
+      if l:src_path ==# ''
+        let l:src_path = s:ConsumePendingPaste(l:bufnr, l:name, l:new_names_bare, l:dir)
+      endif
       if l:src_path !=# ''
         let l:fparent = fnamemodify(l:fpath, ':h')
         if !isdirectory(l:fparent)
           call mkdir(l:fparent, 'p')
         endif
         if has_key(s:cut_paths, l:src_path)
-          " Cut (dd)
           if rename(l:src_path, l:fpath) !=# 0
             echohl ErrorMsg | echo 'VimExplorer: failed to move to: ' . l:fpath | echohl None
           else
@@ -230,7 +206,6 @@ function! vimexplorer#Save() abort
             echo 'Moved: ' . l:src_path . ' → ' . l:fpath
           endif
         else
-          " Yank (yy) → copy (recursive for directories)
           if isdirectory(l:src_path)
             let l:out = system('cp -r ' . shellescape(l:src_path) . ' ' . shellescape(l:fpath))
             if v:shell_error !=# 0
@@ -264,11 +239,13 @@ function! vimexplorer#Save() abort
     endif
   endfor
 
+  if has_key(s:pending_pastes, l:bufnr)
+    unlet s:pending_pastes[l:bufnr]
+  endif
   call s:Render(l:bufnr)
   setlocal nomodified
 endfunction
 
-" Refresh the explorer
 function! vimexplorer#Refresh() abort
   let l:bufnr = bufnr('%')
   if has_key(s:state, l:bufnr)
@@ -277,7 +254,6 @@ function! vimexplorer#Refresh() abort
   endif
 endfunction
 
-" Enter file or directory under cursor
 function! vimexplorer#Enter() abort
   let l:bufnr = bufnr('%')
   if !has_key(s:state, l:bufnr)
@@ -302,7 +278,6 @@ function! vimexplorer#Enter() abort
   endif
 endfunction
 
-" Go up one directory
 function! vimexplorer#Up() abort
   let l:bufnr = bufnr('%')
   if !has_key(s:state, l:bufnr)
@@ -317,7 +292,6 @@ function! vimexplorer#Up() abort
   call vimexplorer#Open(l:parent)
 endfunction
 
-" Toggle hidden files
 function! vimexplorer#ToggleHidden() abort
   let l:bufnr = bufnr('%')
   if !has_key(s:state, l:bufnr)
@@ -328,7 +302,6 @@ function! vimexplorer#ToggleHidden() abort
   call s:Render(l:bufnr)
 endfunction
 
-" Toggle detail (size/perms prefix)
 function! vimexplorer#ToggleDetail() abort
   let l:bufnr = bufnr('%')
   if !has_key(s:state, l:bufnr)
@@ -339,7 +312,6 @@ function! vimexplorer#ToggleDetail() abort
   call s:Render(l:bufnr)
 endfunction
 
-" Mark as cut (normal mode — single line)
 function! vimexplorer#Cut() abort
   let l:bufnr = bufnr('%')
   if !has_key(s:state, l:bufnr)
@@ -357,7 +329,6 @@ function! vimexplorer#Cut() abort
   normal! dd
 endfunction
 
-" Mark as cut (visual mode — multiple lines)
 function! vimexplorer#CutVisual() abort
   let l:bufnr = bufnr('%')
   if !has_key(s:state, l:bufnr)
@@ -386,7 +357,6 @@ function! vimexplorer#CutVisual() abort
   normal! gvd
 endfunction
 
-" Copy absolute path of entry under cursor to system clipboard
 function! vimexplorer#CopyPath() abort
   let l:bufnr = bufnr('%')
   if !has_key(s:state, l:bufnr)
@@ -402,7 +372,6 @@ function! vimexplorer#CopyPath() abort
   echo 'Copied: ' . l:path
 endfunction
 
-" Don't mark as cut
 function! vimexplorer#Yank() abort
   let l:bufnr = bufnr('%')
   if !has_key(s:state, l:bufnr)
@@ -412,17 +381,15 @@ function! vimexplorer#Yank() abort
   if l:name ==# ''
     return
   endif
-  " Remove from cut set in case a previous dd was undone
   let l:path = s:state[l:bufnr].dir . '/' . l:name
+  " Remove from cut set in case a previous dd was undone
   if has_key(s:cut_paths, l:path)
     unlet s:cut_paths[l:path]
   endif
-  " Mark as explicitly yanked so paste in another buffer triggers copy
   let s:yank_paths[l:path] = 1
   normal! yy
 endfunction
 
-" Mark as yanked (visual mode — multiple lines)
 function! vimexplorer#YankVisual() abort
   let l:bufnr = bufnr('%')
   if !has_key(s:state, l:bufnr)
@@ -454,12 +421,75 @@ function! vimexplorer#YankVisual() abort
   normal! gvy
 endfunction
 
-" Set up the explorer buffer
+function! vimexplorer#Paste(cmd) abort
+  let l:bufnr = bufnr('%')
+  if !has_key(s:state, l:bufnr)
+    execute 'normal! ' . a:cmd
+    return
+  endif
+
+  let l:dir = s:state[l:bufnr].dir
+  let l:line = split(getreg('"'), "\n")[0]
+  let l:detail = get(s:state[l:bufnr], 'detail', 0)
+  if l:detail && l:line =~# '^\S\{10\}\s'
+    let l:line = l:line[20:]
+  endif
+  let l:pasted_name = trim(substitute(l:line, '/$', '', ''))
+
+  let l:src = s:FindInOtherBuffers(l:pasted_name, l:dir)
+  if l:src ==# ''
+    let l:same = l:dir . '/' . l:pasted_name
+    if has_key(s:yank_paths, l:same) || has_key(s:cut_paths, l:same)
+      let l:src = l:same
+    endif
+  endif
+
+  execute 'normal! ' . a:cmd
+
+  if l:src !=# ''
+    if !has_key(s:pending_pastes, l:bufnr)
+      let s:pending_pastes[l:bufnr] = []
+    endif
+    call add(s:pending_pastes[l:bufnr], {'pasted_name': l:pasted_name, 'src_path': l:src})
+  endif
+endfunction
+
+" Match a pending paste to a new filename during Save().
+" Tries direct name match first, then rename detection:
+"   cross-dir: pasted name absent from buffer means user renamed it
+"   same-dir:  original file keeps pasted name in buffer forever, so any
+"              unresolved new entry is the renamed duplicate
+function! s:ConsumePendingPaste(bufnr, new_name, all_new_names, current_dir) abort
+  if !has_key(s:pending_pastes, a:bufnr)
+    return ''
+  endif
+  let l:list = s:pending_pastes[a:bufnr]
+
+  for l:i in range(len(l:list))
+    if l:list[l:i].pasted_name ==# a:new_name
+      let l:src = l:list[l:i].src_path
+      call remove(l:list, l:i)
+      return l:src
+    endif
+  endfor
+
+  for l:i in range(len(l:list))
+    let l:p = l:list[l:i]
+    let l:same_dir_paste = (fnamemodify(l:p.src_path, ':h') ==# a:current_dir)
+    if index(a:all_new_names, l:p.pasted_name) ==# -1 || l:same_dir_paste
+      let l:src = l:p.src_path
+      call remove(l:list, l:i)
+      return l:src
+    endif
+  endfor
+
+  return ''
+endfunction
+
 function! s:SetupBuffer(dir) abort
   let l:bufnr = bufnr('%')
 
-  " Buffer-local settings
-  setlocal buftype=acwrite      " We handle writes ourselves via BufWriteCmd
+  setlocal buftype=acwrite  " writes handled by BufWriteCmd
   setlocal bufhidden=hide
   setlocal noswapfile
   setlocal filetype=vimexplorer
@@ -470,7 +500,6 @@ function! s:SetupBuffer(dir) abort
   setlocal nobuflisted
   setlocal statusline=%!vimexplorer#StatusLine()
 
-  " Initialise or update state for this buffer
   if !has_key(s:state, l:bufnr)
     let s:state[l:bufnr] = {}
   endif
@@ -480,7 +509,6 @@ function! s:SetupBuffer(dir) abort
   let s:state[l:bufnr].detail        = get(s:state[l:bufnr], 'detail',        g:vimexplorer_detail)
   let s:state[l:bufnr].show_header   = get(s:state[l:bufnr], 'show_header',   g:vimexplorer_show_header)
 
-  " Key mappings (buffer-local)
   nnoremap <buffer> <silent> <CR>   :call vimexplorer#Enter()<CR>
   nnoremap <buffer> <silent> -      :call vimexplorer#Up()<CR>
   nnoremap <buffer> <silent> <BS>   :call vimexplorer#Up()<CR>
@@ -493,9 +521,10 @@ function! s:SetupBuffer(dir) abort
   nnoremap <buffer> <silent> yy     :call vimexplorer#Yank()<CR>
   xnoremap <buffer> <silent> y      :<C-u>call vimexplorer#YankVisual()<CR>
   nnoremap <buffer> <silent> fp     :call vimexplorer#CopyPath()<CR>
+  nnoremap <buffer> <silent> p      :call vimexplorer#Paste('p')<CR>
+  nnoremap <buffer> <silent> P      :call vimexplorer#Paste('P')<CR>
 endfunction
 
-" Render the buffer contents
 function! s:Render(bufnr) abort
   if !has_key(s:state, a:bufnr)
     return
@@ -511,8 +540,6 @@ function! s:Render(bufnr) abort
   let l:lines = []
   let l:names = []
 
-  " Header comment (not editable — users should not modify it, but it is
-  " just a comment and will be ignored during save parsing)
   if l:st.show_header
     call add(l:lines, '" ' . l:dir)
     call add(l:lines, '" [<CR>] open  [-] up  [gh] hidden  [gd] detail  [?] help')
@@ -538,10 +565,8 @@ function! s:Render(bufnr) abort
   let l:st.names = l:names
 endfunction
 
-" Read and sort directory entries
 function! s:ReadDir(dir, show_hidden) abort
-  " Use readdir() instead of glob() so that directory names containing special
-  " glob characters (e.g. "[slug]", "{foo}", "*") are handled literally.
+  " Use readdir() not glob() — glob breaks on names with [ ] { } *
   let l:names = readdir(a:dir)
   if !a:show_hidden
     let l:names = filter(l:names, 'v:val[0] !=# "."')
@@ -564,12 +589,10 @@ function! s:ReadDir(dir, show_hidden) abort
     call add(l:entries, l:entry)
   endfor
 
-  " Sort dirs first, then alphabetical (case-insensitive)
   call sort(l:entries, function('s:CompareEntries'))
   return l:entries
 endfunction
 
-" Format a single entry for display
 function! s:FormatEntry(entry, detail) abort
   let l:suffix = a:entry.is_dir ? '/' : ''
   let l:name   = a:entry.name . l:suffix
@@ -583,7 +606,6 @@ function! s:FormatEntry(entry, detail) abort
   endif
 endfunction
 
-" Get name under cursor (strips detail prefix)
 function! s:NameUnderCursor() abort
   let l:line = getline('.')
   if l:line =~# '^"' || l:line =~# '^\s*$'
@@ -594,7 +616,7 @@ function! s:NameUnderCursor() abort
   let l:detail = get(get(s:state, l:bufnr, {}), 'detail', 0)
 
   if l:detail && l:line =~# '^\S\{10\}\s'
-    " Existing entry with detail prefix: perms(10) + 2sp + size(6) + 2sp = 20 chars
+    " detail prefix: perms(10) + 2sp + size(6) + 2sp = 20 chars
     let l:name = l:line[20:]
   else
     let l:name = l:line
@@ -604,7 +626,6 @@ function! s:NameUnderCursor() abort
   return trim(l:name)
 endfunction
 
-" Parse buffer lines into name list (for Save)
 function! s:ParseLines(lines) abort
   let l:names = []
   for l:line in a:lines
@@ -616,14 +637,13 @@ function! s:ParseLines(lines) abort
     let l:detail = get(get(s:state, l:bufnr, {}), 'detail', 0)
 
     if l:detail && l:line =~# '^\S\{10\}\s'
-      " Existing entry with detail prefix: perms(10) + 2sp + size(6) + 2sp = 20 chars
+      " detail prefix: perms(10) + 2sp + size(6) + 2sp = 20 chars
       let l:name = l:line[20:]
     else
       let l:name = l:line
     endif
 
-    " Do NOT strip the trailing slash here — Save() uses it to detect
-    " that the user wants a directory created, not a file.
+    " Do NOT strip trailing slash — Save() uses it to detect directory creation
     let l:name = trim(l:name)
     if l:name !=# ''
       call add(l:names, l:name)
@@ -632,7 +652,6 @@ function! s:ParseLines(lines) abort
   return l:names
 endfunction
 
-" Sort comparator: dirs first, then alphabetical
 function! s:CompareEntries(a, b) abort
   if a:a.is_dir && !a:b.is_dir | return -1 | endif
   if !a:a.is_dir && a:b.is_dir | return  1 | endif
@@ -641,7 +660,6 @@ function! s:CompareEntries(a, b) abort
   return l:la ==# l:lb ? 0 : l:la <# l:lb ? -1 : 1
 endfunction
 
-" Human-readable file size
 function! s:HumanSize(bytes) abort
   if a:bytes < 0
     return '?'
@@ -656,14 +674,11 @@ function! s:HumanSize(bytes) abort
   endif
 endfunction
 
-" File permissions string
 function! s:FilePerms(path) abort
-  " Use getfperm() — returns e.g. "rwxr-xr-x"
   let l:perms = getfperm(a:path)
   if l:perms ==# ''
     return '----------'
   endif
-  " Prefix with d for directories, - for files, l for links
   if isdirectory(a:path)
     return 'd' . l:perms
   elseif getftype(a:path) ==# 'link'
@@ -673,7 +688,6 @@ function! s:FilePerms(path) abort
   endif
 endfunction
 
-" Status line helper
 function! vimexplorer#StatusLine() abort
   let l:bufnr = bufnr('%')
   if !has_key(s:state, l:bufnr)
@@ -685,10 +699,8 @@ function! vimexplorer#StatusLine() abort
   return ' VimExplorer  ' . l:st.dir . '  ' . l:h . l:d
 endfunction
 
-" Find a file by name in any other open explorer buffer.
-" Only returns a path if it was explicitly cut (dd) or yanked (yy) —
-" prevents accidental copy when a same-named file exists elsewhere.
-" Returns the full path if found, or '' otherwise.
+" Only returns a path if it was explicitly cut or yanked — prevents accidental
+" copy when a same-named file exists in another open explorer buffer.
 function! s:FindInOtherBuffers(name, current_dir) abort
   for [l:bufnr, l:st] in items(s:state)
     if l:st.dir ==# a:current_dir
@@ -703,7 +715,6 @@ function! s:FindInOtherBuffers(name, current_dir) abort
   return ''
 endfunction
 
-" Show help
 function! vimexplorer#Help() abort
   echo ''
   echo 'VimExplorer key bindings'

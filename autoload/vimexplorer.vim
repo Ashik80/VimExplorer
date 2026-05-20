@@ -439,26 +439,32 @@ function! vimexplorer#Paste(cmd) abort
   let l:src = s:FindInOtherBuffers(l:pasted_name, l:dir)
   if l:src ==# ''
     let l:same = l:dir . '/' . l:pasted_name
-    if has_key(s:yank_paths, l:same) || has_key(s:cut_paths, l:same)
+    if (has_key(s:yank_paths, l:same) || has_key(s:cut_paths, l:same))
+          \ && (filereadable(l:same) || isdirectory(l:same))
       let l:src = l:same
     endif
   endif
 
   execute 'normal! ' . a:cmd
+  let l:pasted_lnum = line('.')
 
   if l:src !=# ''
     if !has_key(s:pending_pastes, l:bufnr)
       let s:pending_pastes[l:bufnr] = []
     endif
-    call add(s:pending_pastes[l:bufnr], {'pasted_name': l:pasted_name, 'src_path': l:src})
+    call add(s:pending_pastes[l:bufnr], {
+          \ 'pasted_name': l:pasted_name,
+          \ 'src_path':    l:src,
+          \ 'pasted_lnum': l:pasted_lnum,
+          \ })
   endif
 endfunction
 
 " Match a pending paste to a new filename during Save().
-" Tries direct name match first, then rename detection:
-"   cross-dir: pasted name absent from buffer means user renamed it
-"   same-dir:  original file keeps pasted name in buffer forever, so any
-"              unresolved new entry is the renamed duplicate
+" Direct name match first; then rename detection:
+"   cross-dir: pasted name absent from buffer → renamed
+"   same-dir:  original keeps pasted name forever; resolve by reading the
+"              current content of the recorded paste line number
 function! s:ConsumePendingPaste(bufnr, new_name, all_new_names, current_dir) abort
   if !has_key(s:pending_pastes, a:bufnr)
     return ''
@@ -476,7 +482,24 @@ function! s:ConsumePendingPaste(bufnr, new_name, all_new_names, current_dir) abo
   for l:i in range(len(l:list))
     let l:p = l:list[l:i]
     let l:same_dir_paste = (fnamemodify(l:p.src_path, ':h') ==# a:current_dir)
-    if index(a:all_new_names, l:p.pasted_name) ==# -1 || l:same_dir_paste
+    if l:same_dir_paste
+      " Resolve by reading the actual current name at the pasted line number
+      let l:raw = getbufline(a:bufnr, l:p.pasted_lnum)
+      if empty(l:raw)
+        continue
+      endif
+      let l:raw_line = l:raw[0]
+      if l:raw_line =~# '^\S\{10\}\s'
+        let l:raw_line = l:raw_line[20:]
+      endif
+      let l:current_name = trim(substitute(l:raw_line, '/$', '', ''))
+      if l:current_name !=# a:new_name
+        continue
+      endif
+      let l:src = l:p.src_path
+      call remove(l:list, l:i)
+      return l:src
+    elseif index(a:all_new_names, l:p.pasted_name) ==# -1
       let l:src = l:p.src_path
       call remove(l:list, l:i)
       return l:src

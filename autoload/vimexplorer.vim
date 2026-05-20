@@ -543,7 +543,7 @@ function! s:SetupBuffer(dir) abort
   xnoremap <buffer> <silent> d      :<C-u>call vimexplorer#CutVisual()<CR>
   nnoremap <buffer> <silent> yy     :call vimexplorer#Yank()<CR>
   xnoremap <buffer> <silent> y      :<C-u>call vimexplorer#YankVisual()<CR>
-  nnoremap <buffer> <silent> fp     :call vimexplorer#CopyPath()<CR>
+  nnoremap <buffer> <silent> gcp    :call vimexplorer#CopyPath()<CR>
   nnoremap <buffer> <silent> p      :call vimexplorer#Paste('p')<CR>
   nnoremap <buffer> <silent> P      :call vimexplorer#Paste('P')<CR>
 endfunction
@@ -748,7 +748,7 @@ function! vimexplorer#Help() abort
   echo 'gh      Toggle hidden files'
   echo 'gd      Toggle detail mode (size + perms)'
   echo 'R       Refresh listing'
-  echo 'fp      Copy absolute path to clipboard'
+  echo 'gcp     Copy absolute path to clipboard'
   echo ':w      Apply pending renames / deletions / creations / moves / copies'
   echo '?       Show this help'
   echo ''
